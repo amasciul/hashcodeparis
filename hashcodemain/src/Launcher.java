@@ -1,10 +1,11 @@
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 public class Launcher {
 
-    private static final int DEPTH = 5;
     private static String input = "paris_54000.txt";
     private static String output = "output.txt";
 
@@ -16,6 +17,8 @@ public class Launcher {
 
     private static ArrayList<Intersection> intersections = new ArrayList<Intersection>();
     private static ArrayList<Street> streets = new ArrayList<Street>();
+    private static int BASE_DEPTH = 4;
+    private static int MAX_DEPTH = 6;
 
 
     public static class Intersection {
@@ -83,6 +86,7 @@ public class Launcher {
     public static ArrayList<ArrayList<Intersection>> findRoads() {
         ArrayList<ArrayList<Intersection>> roads = new ArrayList<ArrayList<Intersection>>();
         for(int i = 0; i < C; i++) {
+            System.out.println("Car number " + i);
             roads.add(findRoad());
         }
         return roads;
@@ -165,24 +169,32 @@ public class Launcher {
 
     public static Street bestStreet(Intersection current, int timeLeft) {
         double maxScore = 0;
-        Street bestStreet = null;
+        ArrayList<Street> bestStreets = new ArrayList<Street>();
 
-        for(Street street: streets) {
-            if(street.oneWay == 1 && street.start != current) continue;
-            if(street.oneWay == 2 && street.start != current && street.end != current) continue;
-            if(street.cost > timeLeft) continue;
+        int depth = BASE_DEPTH;
+        while (maxScore == 0 && depth < MAX_DEPTH) {
 
-            double score = getScore(DEPTH, current, street, timeLeft);
-            if(score >= maxScore) {
-                maxScore = score;
-                bestStreet = street;
+            for (Street street : streets) {
+                if (street.oneWay == 1 && street.start != current) continue;
+                if (street.oneWay == 2 && street.start != current && street.end != current) continue;
+                if (street.cost > timeLeft) continue;
+
+
+                double score = getScore(depth, current, street, timeLeft);
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestStreets.clear();
+                    bestStreets.add(street);
+                } else if (score == maxScore) {
+                    bestStreets.add(street);
+                }
             }
-        }
-        if(maxScore == 0) {
-            return bestStreet;
+            depth++;
         }
 
-        return bestStreet;
+        if(bestStreets.size() == 0) return null;
+
+        return bestStreets.get(new Random().nextInt(bestStreets.size()));
     }
 
     private static void init(){
