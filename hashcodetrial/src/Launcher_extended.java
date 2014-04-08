@@ -6,7 +6,7 @@ public class Launcher_extended {
 
     private static final String OUTPUT = "output.txt";
     private static final String INPUT = "doodle.txt";
-    private static final int MAX_SQUARE_SIZE = 2 * 20 + 1; // used for performance issues
+    private static final int MAX_SQUARE_SIZE = 2 * 24 + 1; // used for performance issues
     private static final int BASE_DEPTH = 4;
     private static int maxSquareSize = MAX_SQUARE_SIZE; // used for performance issues
     //private static int currentDepth = BASE_DEPTH;
@@ -152,7 +152,7 @@ public class Launcher_extended {
                 System.out.println("best square size " + bestSquare.s + " max score " + bestSquare.score + " still " + pixelToPaint);
                 // If the best score is found with a size that is far from the max square size
                 // we just reduce the max square size.
-                if (localMaxSquareSize - bestSquare.s >= 10) {
+                if (localMaxSquareSize - bestSquare.s >= 12) {
                     System.out.println("we should probably stop looking at sizes " + maxSquareSize);
                     maxSquareSize -= 2;
                 }
@@ -199,7 +199,7 @@ public class Launcher_extended {
 
         // If the best score is found with a size that is far from the max square size
         // we just reduce the max square size.
-        if (localMaxSquareSize - bestSquare.s >= 8) {
+        if (localMaxSquareSize - bestSquare.s >= 12) {
             System.out.println("we should probably stop looking at sizes " + maxSquareSize);
             maxSquareSize -= 2;
         }
