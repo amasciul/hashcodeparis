@@ -17,8 +17,8 @@ public class Launcher_extended {
 
     private static ArrayList<Intersection> intersections = new ArrayList<Intersection>();
     private static ArrayList<Street> streets = new ArrayList<Street>();
-    private static int BASE_DEPTH = 11;
-    private static int MAX_DEPTH = 12;
+    private static int BASE_DEPTH = 13;
+    private static int MAX_DEPTH = 13;
     private static double minRatio = 0d;
 
     private static int endCauseByDepth = 0;
@@ -583,7 +583,7 @@ public class Launcher_extended {
         ArrayList<ScoreResult> maxScoreResults = new ArrayList<ScoreResult>();
         int depth = BASE_DEPTH;
         // While we don't have a suitable score and we can go a bit further
-        while (maxRatio <= minRatio && depth < MAX_DEPTH) {
+        while (maxRatio <= minRatio && depth <= MAX_DEPTH) {
             // For all the streets
             for (Street street : streets) {
                 // Check if we can take the given street
@@ -604,7 +604,7 @@ public class Launcher_extended {
             depth++;
         }
 
-        if (depth >= MAX_DEPTH) {
+        if (maxRatio <= minRatio) {
             endCauseByDepth++;
         }
 
