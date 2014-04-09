@@ -17,7 +17,7 @@ public class Launcher_extended {
 
     private static ArrayList<Intersection> intersections = new ArrayList<Intersection>();
     private static ArrayList<Street> streets = new ArrayList<Street>();
-    private static int BASE_DEPTH = 2;
+    private static int BASE_DEPTH = 11;
     private static int MAX_DEPTH = 12;
     private static double minRatio = 0d;
 
