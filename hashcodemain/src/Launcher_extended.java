@@ -1,6 +1,7 @@
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
@@ -17,11 +18,14 @@ public class Launcher_extended {
 
     private static ArrayList<Intersection> intersections = new ArrayList<Intersection>();
     private static ArrayList<Street> streets = new ArrayList<Street>();
-    private static int BASE_DEPTH = 13;
-    private static int MAX_DEPTH = 13;
+
+    private static int BASE_DEPTH = 16;
+    private static int MAX_DEPTH = 16;
     private static double minRatio = 0d;
+    private static int maxVisit = 0;
 
     private static int endCauseByDepth = 0;
+    private static int randomChoices = 0;
     private static long globalTimeLeft = 0;
     private static long globalPoints = 0;
 
@@ -40,12 +44,14 @@ public class Launcher_extended {
         public double lng;
         public int index;
         public List<Street> streetFrom;
+        public List<Path> paths;
 
         public Intersection(double lat, double lng, int index) {
             this.lat = lat;
             this.lng = lng;
             this.index = index;
             this.streetFrom = new ArrayList<Street>();
+            this.paths = null;
         }
 
         public void initStreetFrom(List<Street> streets) {
@@ -61,13 +67,17 @@ public class Launcher_extended {
     }
 
     public static class Street {
-        public Street(Intersection start, Intersection end, int oneWay, double cost, double length) {
+        public Street(long id, Intersection start, Intersection end, int oneWay, double cost, double length) {
+            this.id = id;
             this.start = start;
             this.end = end;
             this.oneWay = oneWay;
             this.cost = cost;
             this.length = length;
         }
+
+
+        public long id;
 
         public Intersection start;
         public Intersection end;
@@ -88,6 +98,8 @@ public class Launcher_extended {
         System.out.println("done");
         List<Car> cars = getCars();
 
+        // setPaths();
+
         System.out.println("moveCars");
         ArrayList<ArrayList<Intersection>> roads = moveCars(cars);
         System.out.println("done");
@@ -101,6 +113,7 @@ public class Launcher_extended {
         }
 
         System.out.println("endCausedByDepth = " + endCauseByDepth);
+        System.out.println("randomChoices = " + randomChoices);
         System.out.println("Global points -- " + globalPoints);
 
         return;
@@ -126,7 +139,7 @@ public class Launcher_extended {
             oneCarMoved = false;
             for (Car car : cars) {
                 if (car.isMoving) {
-                    if (moveCar(car)) {
+                    if (moveCarUsingPath(car)) {
                         oneCarMoved = true;
                     }
                 }
@@ -141,6 +154,24 @@ public class Launcher_extended {
     }
 
 
+    public static boolean moveCarMinimizingVisit(Car car) {
+        VisitResult bestScoreResult = bestVisitResult(car.currentIntersection, car.timeLeft);
+
+        if (bestScoreResult != null) {
+            double totalTime = visitStreets(bestScoreResult.visitedStreets);
+            globalTimeLeft -= totalTime;
+            car.timeLeft -= totalTime;
+            globalPoints += bestScoreResult.length;
+            car.intersectionsVisited.addAll(bestScoreResult.visitedIntersections);
+            car.currentIntersection = bestScoreResult.visitedIntersections.get(bestScoreResult.visitedIntersections.size() - 1);
+        } else {
+            car.isMoving = false;
+            System.out.println("Car " + car.id + " has stopped with " + car.timeLeft + " seconds left.");
+        }
+
+        return car.isMoving;
+    }
+
     public static boolean moveCar(Car car) {
         ScoreResult bestScoreResult = bestScore(car.currentIntersection, car.timeLeft);
 
@@ -151,9 +182,6 @@ public class Launcher_extended {
             globalPoints += bestScoreResult.length;
             car.intersectionsVisited.addAll(bestScoreResult.visitedIntersections);
             car.currentIntersection = bestScoreResult.visitedIntersections.get(bestScoreResult.visitedIntersections.size() - 1);
-            /*if (bestScoreResult.getRatio() <= minRatio) {
-                System.out.println("Car move, score " + bestScoreResult.length + " (ratio of " + bestScoreResult.getRatio() + ")");
-            }*/
         } else {
             car.isMoving = false;
             System.out.println("Car " + car.id + " has stopped with " + car.timeLeft + " seconds left.");
@@ -161,6 +189,25 @@ public class Launcher_extended {
 
         return car.isMoving;
     }
+
+    public static boolean moveCarUsingPath(Car car) {
+        ScoreResult bestScoreResult = bestScoreUsingPath(car.currentIntersection, car.timeLeft);
+
+        if (bestScoreResult != null && bestScoreResult.visitedIntersections.size() > 0) {
+            double totalTime = visitStreets(bestScoreResult.visitedStreets);
+            globalTimeLeft -= totalTime;
+            car.timeLeft -= totalTime;
+            globalPoints += bestScoreResult.length;
+            car.intersectionsVisited.addAll(bestScoreResult.visitedIntersections);
+            car.currentIntersection = bestScoreResult.visitedIntersections.get(bestScoreResult.visitedIntersections.size() - 1);
+        } else {
+            car.isMoving = false;
+            System.out.println("Car " + car.id + " has stopped with " + car.timeLeft + " seconds left.");
+        }
+
+        return car.isMoving;
+    }
+
 
     public static ArrayList<ArrayList<Intersection>> findRoads() {
         ArrayList<ArrayList<Intersection>> roads = new ArrayList<ArrayList<Intersection>>();
@@ -240,6 +287,15 @@ public class Launcher_extended {
             }
         }
         return road;
+    }
+
+    public static List<Intersection> getIntersectionFromPath(Path path, Intersection start) {
+        List<Intersection> intersections = new ArrayList<Intersection>();
+        Intersection current = start;
+        for (Street street : path.streetsToVisit) {
+
+        }
+        return intersections;
     }
 
 
@@ -334,6 +390,66 @@ public class Launcher_extended {
         return minVisited;
     }
 
+    public static class VisitResult extends ScoreResult {
+        public int visit;
+
+        public VisitResult() {
+            super();
+            visit = 0;
+        }
+    }
+
+
+    public static class Path {
+        ArrayList<Street> streetsToVisit;
+
+        public Path() {
+            streetsToVisit = new ArrayList<Street>();
+        }
+    }
+
+    public static ArrayList<Path> getPaths(int depth, Street lastStreet, Intersection currentIntersection, double timeLeft) {
+        ArrayList<Path> paths = new ArrayList<Path>();
+
+
+        if (depth == 1) {
+            for (Street nextStreet : currentIntersection.streetFrom) {
+                if (nextStreet == lastStreet) continue;
+                Intersection nextIntersection = nextStreet.start == currentIntersection ? nextStreet.end : nextStreet.start;
+                Path path = new Path();
+                path.streetsToVisit.add(nextStreet);
+                //path.visitedIntersections.add(nextIntersection);
+                paths.add(path);
+            }
+            return paths;
+        }
+
+        for (Street nextStreet : currentIntersection.streetFrom) {
+            if (lastStreet == nextStreet) continue;
+            if (nextStreet.cost > timeLeft) continue;
+
+            Intersection nextIntersection = nextStreet.start == currentIntersection ? nextStreet.end : nextStreet.start;
+            ArrayList<Path> nextIntersectionPaths = getPaths(depth - 1, nextStreet, nextIntersection, timeLeft - nextStreet.cost);
+            if (nextIntersectionPaths.isEmpty()) {
+                Path path = new Path();
+                path.streetsToVisit.add(nextStreet);
+                //path.visitedIntersections.add(nextIntersection);
+                paths.add(path);
+            } else {
+                for (Path nextIntersectionPath : nextIntersectionPaths) {
+                    Path path = new Path();
+                    path.streetsToVisit.add(nextStreet);
+                    //path.visitedIntersections.add(nextIntersection);
+                    path.streetsToVisit.addAll(nextIntersectionPath.streetsToVisit);
+                    //path.visitedIntersections.addAll(nextIntersectionPath.visitedIntersections);
+                    paths.add(path);
+                }
+            }
+
+        }
+
+        return paths;
+    }
 
     public static class ScoreResult {
 
@@ -521,7 +637,7 @@ public class Launcher_extended {
     }
 
     public static ArrayList<Street> getLongestStreets(Intersection current, int timeLeft, boolean skipVisited) {
-        double maxLength = Double.MIN_VALUE;
+        double maxLength = -1;
         ArrayList<Street> candidateStreets = new ArrayList<Street>();
         for (Street street : streets) {
             if (skipVisited && street.visited > 0) continue;
@@ -578,6 +694,181 @@ public class Launcher_extended {
         return street.start == curPos ? street.end : street.start;
     }
 
+    public static VisitResult getVisitResult(int depth, Intersection current, Street street, double timeLeft, HashMap<Street, Integer> visitStack) {
+        VisitResult visitResult = new VisitResult();
+
+        if (timeLeft < street.cost) {
+            // We don't have time to take the street.
+            // We do nothing
+            return visitResult;
+        }
+
+
+        // We go through the street.
+        visitResult.visitedStreets.add(street);
+        // But if the street is in the current stack we score nothing
+        if (visitStack.containsKey(street)) {
+            visitResult.length = 0;
+            int currentVisit = visitStack.get(street);
+            visitResult.visit += visitResult.visit + currentVisit;
+            visitStack.put(street, currentVisit + 1);
+        } else {
+            // If the street is already visited we "score" nothing
+            visitResult.length = street.visited == 0 ? street.length : 0;
+            visitResult.visit += street.visited;
+            visitStack.put(street, 1);
+        }
+
+        // Even is the street is already visited, it costs the same thing to go through.
+        visitResult.cost = street.cost;
+        Intersection nextIntersection = street.start == current ? street.end : street.start;
+        visitResult.visitedIntersections.add(nextIntersection);
+
+        if (depth == 1) {
+            // We don't look any further.
+            return visitResult;
+        }
+
+        // We look a little bit further and try to get the max score
+        VisitResult bestVisitResult = new VisitResult();
+        bestVisitResult.visit = Integer.MAX_VALUE;
+        for (Street next : nextIntersection.streetFrom) {
+            VisitResult candidateVisitResult = getVisitResult(depth - 1, nextIntersection, next, timeLeft - street.cost, (HashMap<Street, Integer>) visitStack.clone());
+            if (bestVisitResult.visit > candidateVisitResult.visit) {
+                bestVisitResult = candidateVisitResult;
+            } else if (bestVisitResult.visit == candidateVisitResult.visit && bestVisitResult.getRatio() > bestVisitResult.getRatio()) {
+                bestVisitResult = candidateVisitResult;
+            }
+        }
+
+        visitResult.visitedStreets.addAll(bestVisitResult.visitedStreets);
+        visitResult.length += bestVisitResult.length;
+        visitResult.cost += bestVisitResult.cost;
+        visitResult.visitedIntersections.addAll(bestVisitResult.visitedIntersections);
+        visitResult.visit += bestVisitResult.visit;
+
+        return visitResult;
+    }
+
+    public static VisitResult bestVisitResult(Intersection current, int timeLeft) {
+        int minVisit = Integer.MAX_VALUE;
+        ArrayList<VisitResult> minVisitResults = new ArrayList<VisitResult>();
+        int depth = BASE_DEPTH;
+
+        // While we don't have a suitable score and we can go a bit further
+        while (minVisit > maxVisit && depth <= MAX_DEPTH) {
+            // For all the streets
+            for (Street street : streets) {
+                // Check if we can take the given street
+                if (street.oneWay == 1 && street.start != current) continue;
+                if (street.oneWay == 2 && street.start != current && street.end != current) continue;
+                if (street.cost > timeLeft) continue;
+                // Compute the score of the current (depth, street)
+                VisitResult candidateVisitResult = getVisitResult(depth, current, street, timeLeft, new HashMap<Street, Integer>());
+                if (candidateVisitResult.visit < minVisit) {
+                    minVisit = candidateVisitResult.visit;
+                    minVisitResults.clear();
+                    minVisitResults.add(candidateVisitResult);
+                } else if (candidateVisitResult.visit == minVisit) {
+                    minVisitResults.add(candidateVisitResult);
+                }
+            }
+            // don't forget to increase the depth !
+            depth++;
+        }
+
+        if (minVisit > maxVisit) {
+            endCauseByDepth++;
+        }
+
+        // Check is at least one ScoreResult has been found;
+        if (minVisitResults.size() == 0) return null;
+
+        List<VisitResult> finalCandidates = new ArrayList<VisitResult>();
+        if (minVisitResults.size() > 1) {
+            // We have multiple results with the same visits
+            // but not the same cost, let's take the maximum ratio
+            double maxRatio = -1;
+            for (VisitResult visitResult : minVisitResults) {
+                double ratio = visitResult.getRatio();
+                if (visitResult.getRatio() > maxRatio) {
+                    finalCandidates.clear();
+                    finalCandidates.add(visitResult);
+                    maxRatio = visitResult.getRatio();
+                } else if (visitResult.getRatio() == maxRatio) {
+                    finalCandidates.add(visitResult);
+                }
+            }
+        } else {
+            finalCandidates = minVisitResults;
+        }
+
+
+        return finalCandidates.get(new Random().nextInt(finalCandidates.size()));
+    }
+
+
+    public static ScoreResult getScoreFromPath(Intersection start, Path path, int timeLeft) {
+        ScoreResult scoreResult = new ScoreResult();
+        Intersection current = start;
+
+        for (Street street : path.streetsToVisit) {
+            if (street.cost <= timeLeft) {
+                Intersection next = getNextPos(street, current);
+                timeLeft -= street.cost;
+                scoreResult.cost += street.cost;
+                if (!scoreResult.visitedStreets.contains(street)) {
+                    scoreResult.length += street.visited > 0 ? 0 : street.length;
+                }
+                scoreResult.visitedStreets.add(street);
+                scoreResult.visitedIntersections.add(next);
+                current = next;
+            } else {
+                break;
+            }
+        }
+/*
+        if(scoreResult.visitedIntersections.size() > 0) {
+            Intersection next = getNextPos(scoreResult.visitedStreets.get(scoreResult.visitedStreets.size() - 1),
+                    current);
+        }*/
+
+        return scoreResult;
+    }
+
+    public static ScoreResult bestScoreUsingPath(Intersection current, int timeLeft) {
+        double maxRatio = 0d;
+        ArrayList<ScoreResult> maxScoreResults = new ArrayList<ScoreResult>();
+        int depth = BASE_DEPTH;
+
+        if (current.paths == null) {
+            System.out.println("Getting paths for intersection " + current.index);
+            current.paths = getPaths(BASE_DEPTH, null, current, timeLeft);
+        }
+
+        for (Path path : current.paths) {
+            ScoreResult scoreResult = getScoreFromPath(current, path, timeLeft);
+            if (scoreResult.getRatio() > maxRatio) {
+                maxScoreResults.clear();
+                maxScoreResults.add(scoreResult);
+                maxRatio = scoreResult.getRatio();
+            } else if (scoreResult.getRatio() == maxRatio) {
+                maxScoreResults.add(scoreResult);
+            }
+        }
+
+        current.paths = null;
+
+        // Check is at least one ScoreResult has been found;
+        if (maxScoreResults.size() == 0) return null;
+
+        if (maxRatio == 0d) {
+            endCauseByDepth++;
+        }
+
+        return maxScoreResults.get(new Random().nextInt(maxScoreResults.size()));
+    }
+
     public static ScoreResult bestScore(Intersection current, int timeLeft) {
         double maxRatio = 0;
         ArrayList<ScoreResult> maxScoreResults = new ArrayList<ScoreResult>();
@@ -585,10 +876,8 @@ public class Launcher_extended {
         // While we don't have a suitable score and we can go a bit further
         while (maxRatio <= minRatio && depth <= MAX_DEPTH) {
             // For all the streets
-            for (Street street : streets) {
+            for (Street street : current.streetFrom) {
                 // Check if we can take the given street
-                if (street.oneWay == 1 && street.start != current) continue;
-                if (street.oneWay == 2 && street.start != current && street.end != current) continue;
                 if (street.cost > timeLeft) continue;
                 // Compute the score of the current (depth, street)
                 ScoreResult candidateScoreResult = getScore(depth, current, street, timeLeft, new ArrayList<Street>());
@@ -605,13 +894,14 @@ public class Launcher_extended {
         }
 
         if (maxRatio <= minRatio) {
+            System.out.println("End because of depth :( ");
             endCauseByDepth++;
         }
 
         // Check is at least one ScoreResult has been found;
         if (maxScoreResults.size() == 0) return null;
 
-        List<ScoreResult> finalCandidates = new ArrayList<ScoreResult>();
+/*        List<ScoreResult> finalCandidates = new ArrayList<ScoreResult>();
         if (maxScoreResults.size() > 1) {
             // We have multiple results with the same ratio
             // but not the same cost, let's take the minimum cost
@@ -621,47 +911,22 @@ public class Launcher_extended {
                     finalCandidates.clear();
                     finalCandidates.add(scoreResult);
                     minCost = scoreResult.cost;
-                } else {
+                } else if (scoreResult.cost == minCost) {
                     finalCandidates.add(scoreResult);
                 }
             }
         } else {
             finalCandidates = maxScoreResults;
+        }*/
+
+        if (maxScoreResults.size() > 1) {
+            System.out.println("Choose randomly between " + maxScoreResults.size() + " score results of " + maxRatio);
+            randomChoices++;
         }
 
-        return finalCandidates.get(new Random().nextInt(finalCandidates.size()));
+        return maxScoreResults.get(new Random().nextInt(maxScoreResults.size()));
     }
 
-
-/*    public static Street bestStreet(Intersection current, int timeLeft) {
-        double maxScore = 0;
-        ArrayList<Street> bestStreets = new ArrayList<Street>();
-
-        int depth = BASE_DEPTH;
-        while (maxScore == 0 && depth < MAX_DEPTH) {
-
-            for (Street street : streets) {
-                if (street.oneWay == 1 && street.start != current) continue;
-                if (street.oneWay == 2 && street.start != current && street.end != current) continue;
-                if (street.cost > timeLeft) continue;
-
-
-                double score = getScore(depth, current, street, timeLeft);
-                if (score > maxScore) {
-                    maxScore = score;
-                    bestStreets.clear();
-                    bestStreets.add(street);
-                } else if (score == maxScore) {
-                    bestStreets.add(street);
-                }
-            }
-            depth++;
-        }
-
-        if (bestStreets.size() == 0) return null;
-
-        return bestStreets.get(new Random().nextInt(bestStreets.size()));
-    }*/
 
     private static List<Car> getCars() {
         List<Car> cars = new ArrayList<Car>();
@@ -679,8 +944,15 @@ public class Launcher_extended {
         return cars;
     }
 
+    private static void setPaths() {
+        for (Intersection intersection : intersections) {
+            System.out.println("set paths for intersection " + intersection.index);
+            intersection.paths = getPaths(BASE_DEPTH, null, intersection, T);
+        }
+    }
+
     private static void init() {
-        System.out.print("init -- start");
+        System.out.println("init -- start");
         File file = new File(input);
 
         try {
@@ -713,7 +985,7 @@ public class Launcher_extended {
                 double cost = Double.valueOf(data[3]);
                 double length = Double.valueOf(data[4]);
 
-                Street street = new Street(start, end, oneWay, cost, length);
+                Street street = new Street(i, start, end, oneWay, cost, length);
                 streets.add(street);
             }
 
@@ -725,6 +997,6 @@ public class Launcher_extended {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.print("init -- done");
+        System.out.println("init -- done");
     }
 }
