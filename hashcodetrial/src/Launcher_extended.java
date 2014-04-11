@@ -9,7 +9,7 @@ public class Launcher_extended {
     private static final String INPUT = "doodle.txt";
     private static final int MAX_SQUARE_SIZE = 2 * 24 + 1; // used for performance issues
     private static int maxSquareSize = MAX_SQUARE_SIZE; // used for performance issues
-    private static int MAX_SIZE_DIFF = 12; // used for performance issue
+    private static int MAX_SIZE_DIFF = 49; // used for performance issue
 
     public static char[][] picture;
     private static int height;
