@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class Launcher_extended {
@@ -7,9 +8,9 @@ public class Launcher_extended {
     private static final String OUTPUT = "output.txt";
     private static final String INPUT = "doodle.txt";
     private static final int MAX_SQUARE_SIZE = 2 * 24 + 1; // used for performance issues
-    private static final int BASE_DEPTH = 4;
     private static int maxSquareSize = MAX_SQUARE_SIZE; // used for performance issues
-    //private static int currentDepth = BASE_DEPTH;
+    private static int MAX_SIZE_DIFF = 12; // used for performance issue
+
     public static char[][] picture;
     private static int height;
     private static int width;
@@ -18,6 +19,8 @@ public class Launcher_extended {
 
     private static boolean[] skipSize;
     private static double[] minTheoreticalRatio;
+
+    private static HashMap<Integer, List<Square>> squares;
 
     public static class StartingPosition {
         public int height;
@@ -34,6 +37,7 @@ public class Launcher_extended {
             System.out.println("start with max square size " + MAX_SQUARE_SIZE);
             populatePicture();
             initLastStartingPositions();
+            initSquares();
             ArrayList<String> instructions = getPrintingInstuctions();
             writeOutput(instructions);
             System.out.println("end !!!!!!!");
@@ -152,54 +156,38 @@ public class Launcher_extended {
                 System.out.println("best square size " + bestSquare.s + " max score " + bestSquare.score + " still " + pixelToPaint);
                 // If the best score is found with a size that is far from the max square size
                 // we just reduce the max square size.
-                if (localMaxSquareSize - bestSquare.s >= 12) {
+                if (localMaxSquareSize - bestSquare.s >= MAX_SIZE_DIFF) {
                     System.out.println("we should probably stop looking at sizes " + maxSquareSize);
                     maxSquareSize -= 2;
                 }
                 return bestSquare;
             }
 
-            // Get the last stating position
-            StartingPosition startingPosition = lastStartingPositions.get(s);
-            boolean findCandidateSquare = false;
-
-            // try to get the maximum local score.
-            for (int i = startingPosition.height; i <= height - s; i++) {
-                for (int j = 0; j <= width - s; j++) {
-                    Score score = calculScore(i, j, s);
-
-                    // we find a potential candidate for the current size
-                    if (score.ratio > 1) {
-                        findCandidateSquare = true;
-                    }
-
-                    // Check if we reached the maximum score.
-                    if (s == localMaxSquareSize && score.ratio == maxTheoreticalRatioForCurrentSize) {
-                        pixelToPaint -= score.toPaint;
-                        System.out.println("max square size " + s + " max score " + score.ratio + " still " + pixelToPaint);
-                        return new Square(i, j, s, score.ratio);
-                    } else if (score.ratio > 1 && score.ratio > bestSquare.score) {
-                        bestSquare = new Square(i, j, s, score.ratio);
-                        bestScore = score;
-                    } else if (!findCandidateSquare) {
-                        startingPosition.height = i;
-                        startingPosition.width = j;
-                    }
+            List<Square> squareForCurrentSize = squares.get(s);
+            List<Square> squaresToRemove = new ArrayList<Square>();
+            for (Square currentSquare : squareForCurrentSize) {
+                Score score = calculScore(currentSquare.top, currentSquare.left, currentSquare.s);
+                if (score.ratio <= 1) {
+                    squaresToRemove.add(currentSquare);
+                } else if (s == localMaxSquareSize && score.ratio == maxTheoreticalRatioForCurrentSize) {
+                    pixelToPaint -= score.toPaint;
+                    System.out.println("max square size " + s + " max score " + score.ratio + " still " + pixelToPaint);
+                    return new Square(currentSquare.top, currentSquare.left, s, score.ratio);
+                } else if (score.ratio > 1 && score.ratio > bestSquare.score) {
+                    bestSquare = new Square(currentSquare.top, currentSquare.left, s, score.ratio);
+                    bestScore = score;
                 }
             }
 
-            // If we found no candidate square for the max size
-            // We wont found such a square in the future
-            // Stop starting at this size
-            if (!findCandidateSquare && s == localMaxSquareSize) {
-                System.out.println("stop looking at size " + maxSquareSize);
-                maxSquareSize -= 2;
+            for (Square squareToRemove : squaresToRemove) {
+                squareForCurrentSize.remove(squareToRemove);
             }
+
         }
 
         // If the best score is found with a size that is far from the max square size
         // we just reduce the max square size.
-        if (localMaxSquareSize - bestSquare.s >= 12) {
+        if (localMaxSquareSize - bestSquare.s >= MAX_SIZE_DIFF) {
             System.out.println("we should probably stop looking at sizes " + maxSquareSize);
             maxSquareSize -= 2;
         }
@@ -256,6 +244,28 @@ public class Launcher_extended {
         result.toErase = toErase;
 
         return result;
+    }
+
+    private static void initSquares() {
+        squares = new HashMap<Integer, List<Square>>();
+        int localMaxSquareSize = Math.min(maxSquareSize, Math.min(height, width));
+
+        // Start with the maxSquareSize .
+        for (int s = localMaxSquareSize; s >= 2; s -= 2) {
+            System.out.println("Init squares of size " + s);
+            List<Square> squaresForCurrentSize = new ArrayList<Square>();
+
+            for (int i = 0; i <= height - s; i++) {
+                for (int j = 0; j <= width - s; j++) {
+                    Score score = calculScore(i, j, s);
+                    if (score.ratio > 1) {
+                        squaresForCurrentSize.add(new Square(i, j, s, score.ratio));
+                    }
+                }
+            }
+
+            squares.put(s, squaresForCurrentSize);
+        }
     }
 
     private static void populatePicture() {
